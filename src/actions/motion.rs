@@ -465,26 +465,10 @@ fn display_row_chars(state: &EditorState, row: usize) -> Vec<char> {
     state.lines.iter_row().nth(row).cloned().unwrap_or_default()
 }
 
-/// Char-index ranges `[start, end)` of each visual row, matching
-/// `LineWrapper::wrap_line`'s hard character wrap.
+/// Char-index ranges `[start, end)` of each visual row. Delegates to the shared
+/// wrapper so display-line motions land exactly where the renderer wraps.
 fn display_wrap_ranges(line: &[char], width: usize, tab_width: usize) -> Vec<(usize, usize)> {
-    if width == 0 || line.is_empty() {
-        return vec![(0, line.len())];
-    }
-    let mut segs = Vec::new();
-    let mut seg_start = 0usize;
-    let mut w = 0usize;
-    for (i, &ch) in line.iter().enumerate() {
-        let cw = char_width(ch, tab_width);
-        if w + cw > width && i > seg_start {
-            segs.push((seg_start, i));
-            seg_start = i;
-            w = 0;
-        }
-        w += cw;
-    }
-    segs.push((seg_start, line.len()));
-    segs
+    crate::view::line_wrapper::LineWrapper::wrap_ranges(line, width, tab_width)
 }
 
 /// The char index within `[s, e)` whose cell spans display column `vcol`.
