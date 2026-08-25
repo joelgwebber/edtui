@@ -81,6 +81,51 @@ impl Execute for ReplaceChar {
     }
 }
 
+/// Toggles the case of the character(s) under the cursor, advancing the cursor
+/// after each (stopping at the end of the line). Vim `~`.
+#[derive(Clone, Debug, Copy)]
+pub struct ToggleCase(pub usize);
+
+impl Execute for ToggleCase {
+    fn set_count(&mut self, count: usize) {
+        self.0 = count;
+    }
+
+    fn execute(&mut self, state: &mut EditorState) {
+        if is_out_of_bounds(&state.lines, &state.cursor) {
+            return;
+        }
+        state.capture();
+        for _ in 0..self.0 {
+            if is_out_of_bounds(&state.lines, &state.cursor) {
+                break;
+            }
+            if let Some(ch) = state.lines.get_mut(state.cursor) {
+                let toggled = if ch.is_uppercase() {
+                    ch.to_lowercase().next()
+                } else if ch.is_lowercase() {
+                    ch.to_uppercase().next()
+                } else {
+                    None
+                };
+                if let Some(t) = toggled {
+                    *ch = t;
+                }
+            }
+            let max = max_col_normal(&state.lines, &state.cursor);
+            if state.cursor.col < max {
+                state.cursor.col += 1;
+            } else {
+                break;
+            }
+        }
+    }
+
+    fn is_repeatable(&self) -> bool {
+        true
+    }
+}
+
 /// Deletes a character to the left of the current cursor. Deletes
 /// the line break if the the cursor is in column zero.
 /// Intended to be called in insert mode.

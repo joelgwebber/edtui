@@ -23,7 +23,8 @@ use crate::actions::{
     MoveParagraphForward, MoveToEndOfLine, MoveToFirst, MoveToMatchinBracket, MoveToStartOfLine,
     MoveUp, MoveWordBackward, MoveWordForward, MoveWordForwardToEndOfWord, Paste, PasteBefore,
     Redo, RemoveChar, RemoveCharFromSearch, RepeatLastChange, ReplaceChar, SelectCurrentSearch,
-    SelectInnerBetween, SelectInnerWord, SelectLine, StopSearch, SwitchMode, TillForward, Undo,
+    SelectInnerBetween, SelectInnerWord, SelectLine, StopSearch, SwitchMode, TillForward,
+    ToggleCase, Undo,
 };
 use crate::events::KeyInput;
 use crate::{EditorMode, EditorState};
@@ -526,6 +527,11 @@ fn vim_keybindings() -> HashMap<KeyEventRegister, Action> {
         (
             KeyEventRegister::i(vec![KeyInput::new(KeyCode::Enter)]),
             LineBreak(1).into(),
+        ),
+        // Toggle the case of the character under the cursor
+        (
+            KeyEventRegister::n(vec![KeyInput::new('~')]),
+            ToggleCase(1).into(),
         ),
         // Remove the current character
         (
@@ -1565,6 +1571,27 @@ mod tests {
         assert_eq!(state.cursor, Index2::new(0, 6)); // 'r' at end of "foo.bar"
         handler.on_event(KeyInput::shift('E'), &mut state);
         assert_eq!(state.cursor, Index2::new(0, 10)); // 'z' at end of "baz"
+    }
+
+    #[test]
+    fn test_toggle_case() {
+        use crate::{EditorState, Index2, Lines};
+
+        let mut state = EditorState::new(Lines::from("aB1"));
+        let mut handler = KeyEventHandler::default();
+        state.cursor = Index2::new(0, 0);
+
+        handler.on_event(KeyInput::new('~'), &mut state); // a -> A, advance
+        assert_eq!(state.lines.to_string(), "AB1");
+        assert_eq!(state.cursor, Index2::new(0, 1));
+
+        handler.on_event(KeyInput::new('~'), &mut state); // B -> b, advance
+        assert_eq!(state.lines.to_string(), "Ab1");
+        assert_eq!(state.cursor, Index2::new(0, 2));
+
+        handler.on_event(KeyInput::new('~'), &mut state); // digit unchanged, at EOL
+        assert_eq!(state.lines.to_string(), "Ab1");
+        assert_eq!(state.cursor, Index2::new(0, 2));
     }
 
     #[test]
