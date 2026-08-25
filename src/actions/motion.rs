@@ -287,6 +287,10 @@ where
 pub struct MoveBigWordForward(pub usize);
 
 impl Execute for MoveBigWordForward {
+    fn set_count(&mut self, count: usize) {
+        self.0 = count;
+    }
+
     fn execute(&mut self, state: &mut EditorState) {
         if state.lines.is_empty() {
             return;
@@ -333,6 +337,10 @@ fn move_big_word_forward(state: &mut EditorState) {
 pub struct MoveBigWordForwardToEndOfWord(pub usize);
 
 impl Execute for MoveBigWordForwardToEndOfWord {
+    fn set_count(&mut self, count: usize) {
+        self.0 = count;
+    }
+
     fn execute(&mut self, state: &mut EditorState) {
         if state.lines.is_empty() {
             return;
@@ -376,6 +384,10 @@ fn move_big_word_forward_to_end_of_word(state: &mut EditorState) {
 pub struct MoveBigWordBackward(pub usize);
 
 impl Execute for MoveBigWordBackward {
+    fn set_count(&mut self, count: usize) {
+        self.0 = count;
+    }
+
     fn execute(&mut self, state: &mut EditorState) {
         if state.lines.is_empty() {
             return;
