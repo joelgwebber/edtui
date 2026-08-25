@@ -1,9 +1,4 @@
-use crate::{
-    helper::{char_width, chars_width},
-    view::line_wrapper::LineWrapper,
-    view::LineNumbers,
-    Lines,
-};
+use crate::{Lines, helper::char_width, view::LineNumbers, view::line_wrapper::LineWrapper};
 use ratatui_core::layout::{Position, Rect};
 
 /// Represents the (x, y) offset of the editor's viewport.
@@ -201,8 +196,8 @@ impl ViewState {
 
         let skip = lines.len().saturating_sub(cursor_row + 1);
         for (i, line) in lines.iter_row().rev().skip(skip).enumerate() {
-            let line_width = chars_width(line, self.tab_width);
-            let current_row_height = LineWrapper::determine_split(line_width, max_width).len();
+            let current_row_height =
+                LineWrapper::wrap_ranges(line, max_width, self.tab_width).len();
 
             // If we run out of height or exceed it, scroll the viewport.
             if remaining_height < current_row_height {
