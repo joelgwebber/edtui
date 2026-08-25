@@ -9,7 +9,8 @@ use crate::actions::delete::{
     DeleteWordBackward, DeleteWordForward,
 };
 use crate::actions::motion::{
-    MoveHalfPageDown, MovePageDown, MovePageUp, MoveToFirstRow, MoveToLastRow,
+    MoveDisplayLineDown, MoveDisplayLineUp, MoveHalfPageDown, MovePageDown, MovePageUp,
+    MoveToDisplayLineEnd, MoveToDisplayLineStart, MoveToFirstRow, MoveToLastRow,
 };
 use crate::actions::search::StartSearch;
 use crate::actions::{
@@ -475,6 +476,39 @@ fn vim_keybindings() -> HashMap<KeyEventRegister, Action> {
         (
             KeyEventRegister::v(vec![KeyInput::new('g'), KeyInput::new('g')]),
             MoveToFirstRow().into(),
+        ),
+        // Display-line motions: gj / gk / g0 / g$ (move by visual/wrapped line)
+        (
+            KeyEventRegister::n(vec![KeyInput::new('g'), KeyInput::new('j')]),
+            MoveDisplayLineDown(1).into(),
+        ),
+        (
+            KeyEventRegister::v(vec![KeyInput::new('g'), KeyInput::new('j')]),
+            MoveDisplayLineDown(1).into(),
+        ),
+        (
+            KeyEventRegister::n(vec![KeyInput::new('g'), KeyInput::new('k')]),
+            MoveDisplayLineUp(1).into(),
+        ),
+        (
+            KeyEventRegister::v(vec![KeyInput::new('g'), KeyInput::new('k')]),
+            MoveDisplayLineUp(1).into(),
+        ),
+        (
+            KeyEventRegister::n(vec![KeyInput::new('g'), KeyInput::new('0')]),
+            MoveToDisplayLineStart.into(),
+        ),
+        (
+            KeyEventRegister::v(vec![KeyInput::new('g'), KeyInput::new('0')]),
+            MoveToDisplayLineStart.into(),
+        ),
+        (
+            KeyEventRegister::n(vec![KeyInput::new('g'), KeyInput::new('$')]),
+            MoveToDisplayLineEnd.into(),
+        ),
+        (
+            KeyEventRegister::v(vec![KeyInput::new('g'), KeyInput::new('$')]),
+            MoveToDisplayLineEnd.into(),
         ),
         (
             KeyEventRegister::n(vec![KeyInput::shift('G')]),
@@ -1627,6 +1661,39 @@ mod tests {
         state.cursor = Index2::new(0, 0);
         handler.on_event(KeyInput::shift('X'), &mut state);
         assert_eq!(state.lines.to_string(), "hllo");
+    }
+
+    #[test]
+    fn test_display_line_motions() {
+        use crate::{EditorMode, EditorState, Index2, Lines};
+        use ratatui_core::layout::Rect;
+
+        // "aaaabbbbcccc" wrapped at width 4 -> visual rows aaaa | bbbb | cccc.
+        let mut state = EditorState::new(Lines::from("aaaabbbbcccc"));
+        state.view.wrap = true;
+        state.view.screen_area = Rect::new(0, 0, 4, 10);
+        state.mode = EditorMode::Normal;
+        let mut handler = KeyEventHandler::default();
+        state.cursor = Index2::new(0, 1);
+
+        // gj / gk move by visual line, keeping the visual column.
+        handler.on_event(KeyInput::new('g'), &mut state);
+        handler.on_event(KeyInput::new('j'), &mut state);
+        assert_eq!(state.cursor, Index2::new(0, 5));
+        handler.on_event(KeyInput::new('g'), &mut state);
+        handler.on_event(KeyInput::new('j'), &mut state);
+        assert_eq!(state.cursor, Index2::new(0, 9));
+        handler.on_event(KeyInput::new('g'), &mut state);
+        handler.on_event(KeyInput::new('k'), &mut state);
+        assert_eq!(state.cursor, Index2::new(0, 5));
+
+        // g0 / g$ jump to the start / end of the current visual line.
+        handler.on_event(KeyInput::new('g'), &mut state);
+        handler.on_event(KeyInput::new('0'), &mut state);
+        assert_eq!(state.cursor, Index2::new(0, 4));
+        handler.on_event(KeyInput::new('g'), &mut state);
+        handler.on_event(KeyInput::new('$'), &mut state);
+        assert_eq!(state.cursor, Index2::new(0, 7));
     }
 
     #[test]
