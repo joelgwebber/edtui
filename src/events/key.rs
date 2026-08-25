@@ -22,9 +22,9 @@ use crate::actions::{
     MoveBigWordForwardToEndOfWord, MoveDown, MoveForward, MoveHalfPageUp, MoveParagraphBackward,
     MoveParagraphForward, MoveToEndOfLine, MoveToFirst, MoveToMatchinBracket, MoveToStartOfLine,
     MoveUp, MoveWordBackward, MoveWordForward, MoveWordForwardToEndOfWord, Paste, PasteBefore,
-    Redo, RemoveChar, RemoveCharFromSearch, RepeatLastChange, ReplaceChar, SelectCurrentSearch,
-    SelectInnerBetween, SelectInnerWord, SelectLine, StopSearch, SwitchMode, TillForward,
-    ToggleCase, Undo,
+    Redo, RemoveChar, RemoveCharBefore, RemoveCharFromSearch, RepeatLastChange, ReplaceChar,
+    SelectCurrentSearch, SelectInnerBetween, SelectInnerWord, SelectLine, StopSearch, SwitchMode,
+    TillForward, ToggleCase, Undo,
 };
 use crate::events::KeyInput;
 use crate::{EditorMode, EditorState};
@@ -546,6 +546,11 @@ fn vim_keybindings() -> HashMap<KeyEventRegister, Action> {
         (
             KeyEventRegister::n(vec![KeyInput::new('r')]),
             ReplaceChar(None).into(),
+        ),
+        // Delete the character before the cursor (within the line)
+        (
+            KeyEventRegister::n(vec![KeyInput::shift('X')]),
+            RemoveCharBefore(1).into(),
         ),
         // Delete the previous character
         (
@@ -1592,6 +1597,36 @@ mod tests {
         handler.on_event(KeyInput::new('~'), &mut state); // digit unchanged, at EOL
         assert_eq!(state.lines.to_string(), "Ab1");
         assert_eq!(state.cursor, Index2::new(0, 2));
+    }
+
+    #[test]
+    fn test_x_and_capital_x_yank() {
+        use crate::clipboard::{ClipboardTrait, InternalClipboard};
+        use crate::{EditorState, Index2, Lines};
+
+        // `x` removes the char under the cursor and yanks it.
+        let mut state = EditorState::new(Lines::from("hello"));
+        state.set_clipboard(InternalClipboard::default());
+        let mut handler = KeyEventHandler::default();
+        state.cursor = Index2::new(0, 0);
+        handler.on_event(KeyInput::new('x'), &mut state);
+        assert_eq!(state.lines.to_string(), "ello");
+        assert_eq!(state.clip.get_text(), "h");
+
+        // `X` removes the char before the cursor (within the line) and yanks it.
+        let mut state = EditorState::new(Lines::from("hello"));
+        state.set_clipboard(InternalClipboard::default());
+        let mut handler = KeyEventHandler::default();
+        state.cursor = Index2::new(0, 2); // on the first 'l'
+        handler.on_event(KeyInput::shift('X'), &mut state);
+        assert_eq!(state.lines.to_string(), "hllo"); // removed 'e'
+        assert_eq!(state.cursor, Index2::new(0, 1));
+        assert_eq!(state.clip.get_text(), "e");
+
+        // `X` at column 0 is a no-op (does not join lines).
+        state.cursor = Index2::new(0, 0);
+        handler.on_event(KeyInput::shift('X'), &mut state);
+        assert_eq!(state.lines.to_string(), "hllo");
     }
 
     #[test]

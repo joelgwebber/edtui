@@ -234,7 +234,8 @@ falling back to a platform-specific default if neither is set.
 | `ctrl+u`                  | Jump a half page up                                      |
 | `PageDown`                | Jump a full page down                                    |
 | `PageUp`                  | Jump a full page up                                      |
-| `x`                       | Delete the character under the cursor                    |
+| `x`                       | Delete the character under the cursor (yanks it)         |
+| `X`                       | Delete the character before the cursor (yanks it)        |
 | `u`, `ctrl+r`             | Undo/Redo last action                                    |
 | `Esc`                     | Escape Visual mode                                       |
 | `0`                       | Move cursor to start of line                             |

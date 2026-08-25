@@ -25,7 +25,8 @@ pub use self::cpaste::{CopyLine, CopySelection, Paste, PasteBefore};
 pub use self::delete::{
     DeleteBigWordEnd, DeleteBigWordForward, DeleteChar, DeleteCharForward, DeleteFindForward,
     DeleteLine, DeleteSelection, DeleteTillForward, DeleteToFirstCharOfLine, DeleteWordBackward,
-    DeleteWordEnd, DeleteWordForward, JoinLineWithLineBelow, RemoveChar, ReplaceChar, ToggleCase,
+    DeleteWordEnd, DeleteWordForward, JoinLineWithLineBelow, RemoveChar, RemoveCharBefore,
+    ReplaceChar, ToggleCase,
 };
 pub use self::insert::{AppendNewline, InsertChar, InsertNewline, LineBreak};
 pub use self::motion::{
@@ -80,6 +81,7 @@ pub enum Action {
     ReplaceChar(ReplaceChar),
     ToggleCase(ToggleCase),
     RemoveChar(RemoveChar),
+    RemoveCharBefore(RemoveCharBefore),
     DeleteChar(DeleteChar),
     DeleteCharForward(DeleteCharForward),
     DeleteLine(DeleteLine),

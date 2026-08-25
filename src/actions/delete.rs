@@ -25,21 +25,49 @@ impl Execute for RemoveChar {
     fn execute(&mut self, state: &mut EditorState) {
         state.capture();
         state.clamp_column();
+        let mut yanked = String::new();
         for _ in 0..self.0 {
-            let lines = &mut state.lines;
-            let index = &mut state.cursor;
-
-            if is_out_of_bounds(lines, index) {
-                return;
+            if is_out_of_bounds(&state.lines, &state.cursor) {
+                break;
             }
+            // Yank each removed char so `x` then `p` works (like `dd`/`dw`).
+            yanked.push(state.lines.remove(state.cursor));
+            let len = state.lines.len_col(state.cursor.row).unwrap_or_default();
+            state.cursor.col = state.cursor.col.min(len.saturating_sub(1));
+        }
+        if !yanked.is_empty() {
+            state.clip.set_text(yanked);
+        }
+    }
 
-            let _ = lines.remove(*index);
-            index.col = index.col.min(
-                lines
-                    .len_col(index.row)
-                    .unwrap_or_default()
-                    .saturating_sub(1),
-            );
+    fn is_repeatable(&self) -> bool {
+        true
+    }
+}
+
+/// Deletes the character(s) before the cursor within the line, yanking them.
+/// Does nothing at the start of a line (does not join lines). Vim `X`.
+#[derive(Clone, Debug, Copy)]
+pub struct RemoveCharBefore(pub usize);
+
+impl Execute for RemoveCharBefore {
+    fn set_count(&mut self, count: usize) {
+        self.0 = count;
+    }
+
+    fn execute(&mut self, state: &mut EditorState) {
+        state.capture();
+        let mut yanked = String::new();
+        for _ in 0..self.0 {
+            if state.cursor.col == 0 {
+                break;
+            }
+            let before = Index2::new(state.cursor.row, state.cursor.col - 1);
+            yanked.insert(0, state.lines.remove(before));
+            state.cursor.col -= 1;
+        }
+        if !yanked.is_empty() {
+            state.clip.set_text(yanked);
         }
     }
 
