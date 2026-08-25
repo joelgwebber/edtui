@@ -2,13 +2,13 @@ use jagged::index::RowIndex;
 
 use super::Execute;
 use crate::{
-    actions::motion::{find_char_forward, CharacterClass},
+    EditorState, Index2, Lines,
+    actions::motion::{CharacterClass, find_char_forward},
     clipboard::ClipboardTrait,
     helper::{
         is_out_of_bounds, max_col_insert, max_col_normal, skip_whitespace, skip_whitespace_rev,
     },
     state::selection::Selection,
-    EditorState, Index2, Lines,
 };
 
 /// Deletes a character at the current cursor position. Does not
@@ -59,6 +59,47 @@ impl Execute for ReplaceChar {
         if let Some(ch) = state.lines.get_mut(index) {
             *ch = self.0;
         };
+    }
+
+    fn is_repeatable(&self) -> bool {
+        true
+    }
+}
+
+/// Toggles the case of the character(s) under the cursor, advancing the cursor
+/// after each (stopping at the end of the line). Vim `~`.
+#[derive(Clone, Debug, Copy)]
+pub struct ToggleCase(pub usize);
+
+impl Execute for ToggleCase {
+    fn execute(&mut self, state: &mut EditorState) {
+        if is_out_of_bounds(&state.lines, &state.cursor) {
+            return;
+        }
+        state.capture();
+        for _ in 0..self.0 {
+            if is_out_of_bounds(&state.lines, &state.cursor) {
+                break;
+            }
+            if let Some(ch) = state.lines.get_mut(state.cursor) {
+                let toggled = if ch.is_uppercase() {
+                    ch.to_lowercase().next()
+                } else if ch.is_lowercase() {
+                    ch.to_uppercase().next()
+                } else {
+                    None
+                };
+                if let Some(t) = toggled {
+                    *ch = t;
+                }
+            }
+            let max = max_col_normal(&state.lines, &state.cursor);
+            if state.cursor.col < max {
+                state.cursor.col += 1;
+            } else {
+                break;
+            }
+        }
     }
 
     fn is_repeatable(&self) -> bool {
@@ -591,10 +632,10 @@ impl Execute for JoinLineWithLineBelow {
 
 #[cfg(test)]
 mod tests {
-    use crate::state::selection::Selection;
     use crate::EditorMode;
     use crate::Index2;
     use crate::Lines;
+    use crate::state::selection::Selection;
 
     use super::*;
     fn test_state() -> EditorState {

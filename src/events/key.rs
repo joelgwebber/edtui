@@ -1,6 +1,8 @@
 pub(crate) mod deprecated;
 pub(crate) mod input;
 
+#[cfg(feature = "system-editor")]
+use crate::actions::OpenSystemEditor;
 use crate::actions::cpaste::PasteOverSelection;
 use crate::actions::delete::{
     DeleteBigWordForward, DeleteCharForward, DeleteToEndOfLine, DeleteToFirstCharOfLine,
@@ -10,8 +12,6 @@ use crate::actions::motion::{
     MoveHalfPageDown, MovePageDown, MovePageUp, MoveToFirstRow, MoveToLastRow,
 };
 use crate::actions::search::StartSearch;
-#[cfg(feature = "system-editor")]
-use crate::actions::OpenSystemEditor;
 use crate::actions::{
     Action, AppendCharToSearch, AppendNewline, Chainable, ChangeBigWord, ChangeFindForward,
     ChangeInnerBetween, ChangeInnerBigWord, ChangeInnerWord, ChangeSelection, ChangeTillForward,
@@ -23,7 +23,7 @@ use crate::actions::{
     MoveToMatchinBracket, MoveToStartOfLine, MoveUp, MoveWordBackward, MoveWordForward,
     MoveWordForwardToEndOfWord, Paste, PasteBefore, Redo, RemoveChar, RemoveCharFromSearch,
     RepeatLastChange, SelectCurrentSearch, SelectInnerBetween, SelectInnerWord, SelectLine,
-    StopSearch, SwitchMode, TillForward, Undo,
+    StopSearch, SwitchMode, TillForward, ToggleCase, Undo,
 };
 use crate::events::KeyInput;
 use crate::{EditorMode, EditorState};
@@ -495,6 +495,11 @@ fn vim_keybindings() -> HashMap<KeyEventRegister, Action> {
         (
             KeyEventRegister::i(vec![KeyInput::new(KeyCode::Enter)]),
             LineBreak(1).into(),
+        ),
+        // Toggle the case of the character under the cursor
+        (
+            KeyEventRegister::n(vec![KeyInput::new('~')]),
+            ToggleCase(1).into(),
         ),
         // Remove the current character
         (
@@ -1405,6 +1410,27 @@ mod tests {
         handler.on_event(KeyInput::new('f'), &mut state);
         handler.on_event(KeyInput::new('o'), &mut state);
         assert_eq!(state.cursor, Index2::new(0, 7));
+    }
+
+    #[test]
+    fn test_toggle_case() {
+        use crate::{EditorState, Index2, Lines};
+
+        let mut state = EditorState::new(Lines::from("aB1"));
+        let mut handler = KeyEventHandler::default();
+        state.cursor = Index2::new(0, 0);
+
+        handler.on_event(KeyInput::new('~'), &mut state); // a -> A, advance
+        assert_eq!(state.lines.to_string(), "AB1");
+        assert_eq!(state.cursor, Index2::new(0, 1));
+
+        handler.on_event(KeyInput::new('~'), &mut state); // B -> b, advance
+        assert_eq!(state.lines.to_string(), "Ab1");
+        assert_eq!(state.cursor, Index2::new(0, 2));
+
+        handler.on_event(KeyInput::new('~'), &mut state); // digit unchanged, at EOL
+        assert_eq!(state.lines.to_string(), "Ab1");
+        assert_eq!(state.cursor, Index2::new(0, 2));
     }
 
     #[test]

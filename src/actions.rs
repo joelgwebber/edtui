@@ -25,7 +25,7 @@ pub use self::cpaste::{CopyLine, CopySelection, Paste, PasteBefore};
 pub use self::delete::{
     DeleteBigWordEnd, DeleteBigWordForward, DeleteChar, DeleteCharForward, DeleteFindForward,
     DeleteLine, DeleteSelection, DeleteTillForward, DeleteToFirstCharOfLine, DeleteWordBackward,
-    DeleteWordEnd, DeleteWordForward, JoinLineWithLineBelow, RemoveChar, ReplaceChar,
+    DeleteWordEnd, DeleteWordForward, JoinLineWithLineBelow, RemoveChar, ReplaceChar, ToggleCase,
 };
 pub use self::insert::{AppendNewline, InsertChar, InsertNewline, LineBreak};
 pub use self::motion::{
@@ -74,6 +74,7 @@ pub enum Action {
     AppendNewline(AppendNewline),
     InsertNewline(InsertNewline),
     ReplaceChar(ReplaceChar),
+    ToggleCase(ToggleCase),
     RemoveChar(RemoveChar),
     DeleteChar(DeleteChar),
     DeleteCharForward(DeleteCharForward),
@@ -264,8 +265,8 @@ impl Execute for Composed {
 
 #[cfg(test)]
 mod tests {
-    use crate::clipboard::InternalClipboard;
     use crate::Lines;
+    use crate::clipboard::InternalClipboard;
 
     use super::*;
     fn test_state() -> EditorState {

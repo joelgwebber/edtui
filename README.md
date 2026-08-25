@@ -258,6 +258,7 @@ falling back to a platform-specific default if neither is set.
 | `cf` + `<char>`           | Change up to and including the next `<char>` on the line |
 | `ct` + `<char>`           | Change up to (but not including) the next `<char>`       |
 | `D`                       | Delete to the end of the line                            |
+| `~`                       | Toggle the case of the character under the cursor        |
 | `viw`                     | Select between word.                                     |
 | `ciw`                     | Change between word.                                     |
 | `ciW`                     | Change between WORD (whitespace-delimited)               |
