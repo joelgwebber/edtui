@@ -2,6 +2,7 @@
 pub mod change;
 pub mod cpaste;
 pub mod delete;
+pub mod indent;
 pub mod insert;
 pub mod motion;
 pub mod search;
@@ -27,6 +28,7 @@ pub use self::delete::{
     DeleteLine, DeleteSelection, DeleteTillForward, DeleteToFirstCharOfLine, DeleteWordBackward,
     DeleteWordEnd, DeleteWordForward, JoinLineWithLineBelow, RemoveChar, ReplaceChar,
 };
+pub use self::indent::{DedentLine, DedentSelection, IndentLine, IndentSelection};
 pub use self::insert::{AppendNewline, InsertChar, InsertNewline, LineBreak};
 pub use self::motion::{
     FindForward, MoveBackward, MoveDown, MoveForward, MoveHalfPageDown, MoveHalfPageUp,
@@ -74,6 +76,10 @@ pub enum Action {
     AppendNewline(AppendNewline),
     InsertNewline(InsertNewline),
     ReplaceChar(ReplaceChar),
+    IndentLine(IndentLine),
+    DedentLine(DedentLine),
+    IndentSelection(IndentSelection),
+    DedentSelection(DedentSelection),
     RemoveChar(RemoveChar),
     DeleteChar(DeleteChar),
     DeleteCharForward(DeleteCharForward),
@@ -264,8 +270,8 @@ impl Execute for Composed {
 
 #[cfg(test)]
 mod tests {
-    use crate::clipboard::InternalClipboard;
     use crate::Lines;
+    use crate::clipboard::InternalClipboard;
 
     use super::*;
     fn test_state() -> EditorState {

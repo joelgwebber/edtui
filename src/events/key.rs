@@ -1,6 +1,8 @@
 pub(crate) mod deprecated;
 pub(crate) mod input;
 
+#[cfg(feature = "system-editor")]
+use crate::actions::OpenSystemEditor;
 use crate::actions::cpaste::PasteOverSelection;
 use crate::actions::delete::{
     DeleteBigWordForward, DeleteCharForward, DeleteToEndOfLine, DeleteToFirstCharOfLine,
@@ -10,20 +12,18 @@ use crate::actions::motion::{
     MoveHalfPageDown, MovePageDown, MovePageUp, MoveToFirstRow, MoveToLastRow,
 };
 use crate::actions::search::StartSearch;
-#[cfg(feature = "system-editor")]
-use crate::actions::OpenSystemEditor;
 use crate::actions::{
     Action, AppendCharToSearch, AppendNewline, Chainable, ChangeBigWord, ChangeFindForward,
     ChangeInnerBetween, ChangeInnerBigWord, ChangeInnerWord, ChangeSelection, ChangeTillForward,
-    ChangeWord, CopyLine, CopySelection, DeleteChar, DeleteFindForward, DeleteInnerBetween,
-    DeleteInnerBigWord, DeleteInnerWord, DeleteLine, DeleteSelection, DeleteTillForward, Execute,
-    FindFirst, FindForward, FindNext, FindPrevious, InsertChar, InsertNewline,
-    JoinLineWithLineBelow, LineBreak, MoveBackward, MoveDown, MoveForward, MoveHalfPageUp,
-    MoveParagraphBackward, MoveParagraphForward, MoveToEndOfLine, MoveToFirst,
-    MoveToMatchinBracket, MoveToStartOfLine, MoveUp, MoveWordBackward, MoveWordForward,
-    MoveWordForwardToEndOfWord, Paste, PasteBefore, Redo, RemoveChar, RemoveCharFromSearch,
-    RepeatLastChange, SelectCurrentSearch, SelectInnerBetween, SelectInnerWord, SelectLine,
-    StopSearch, SwitchMode, TillForward, Undo,
+    ChangeWord, CopyLine, CopySelection, DedentLine, DedentSelection, DeleteChar,
+    DeleteFindForward, DeleteInnerBetween, DeleteInnerBigWord, DeleteInnerWord, DeleteLine,
+    DeleteSelection, DeleteTillForward, Execute, FindFirst, FindForward, FindNext, FindPrevious,
+    IndentLine, IndentSelection, InsertChar, InsertNewline, JoinLineWithLineBelow, LineBreak,
+    MoveBackward, MoveDown, MoveForward, MoveHalfPageUp, MoveParagraphBackward,
+    MoveParagraphForward, MoveToEndOfLine, MoveToFirst, MoveToMatchinBracket, MoveToStartOfLine,
+    MoveUp, MoveWordBackward, MoveWordForward, MoveWordForwardToEndOfWord, Paste, PasteBefore,
+    Redo, RemoveChar, RemoveCharFromSearch, RepeatLastChange, SelectCurrentSearch,
+    SelectInnerBetween, SelectInnerWord, SelectLine, StopSearch, SwitchMode, TillForward, Undo,
 };
 use crate::events::KeyInput;
 use crate::{EditorMode, EditorState};
@@ -571,6 +571,23 @@ fn vim_keybindings() -> HashMap<KeyEventRegister, Action> {
         (
             KeyEventRegister::v(vec![KeyInput::new('d')]),
             DeleteSelection.chain(SwitchMode(EditorMode::Normal)).into(),
+        ),
+        // Indent / dedent: >> / << in normal, > / < over a visual selection
+        (
+            KeyEventRegister::n(vec![KeyInput::new('>'), KeyInput::new('>')]),
+            IndentLine(1).into(),
+        ),
+        (
+            KeyEventRegister::n(vec![KeyInput::new('<'), KeyInput::new('<')]),
+            DedentLine(1).into(),
+        ),
+        (
+            KeyEventRegister::v(vec![KeyInput::new('>')]),
+            IndentSelection.into(),
+        ),
+        (
+            KeyEventRegister::v(vec![KeyInput::new('<')]),
+            DedentSelection.into(),
         ),
         // Join the current line with the line below
         (
@@ -1405,6 +1422,39 @@ mod tests {
         handler.on_event(KeyInput::new('f'), &mut state);
         handler.on_event(KeyInput::new('o'), &mut state);
         assert_eq!(state.cursor, Index2::new(0, 7));
+    }
+
+    #[test]
+    fn test_indent_dedent() {
+        use crate::{EditorMode, EditorState, Index2, Lines};
+
+        // Default shiftwidth is the tab width (2).
+        let mut state = EditorState::new(Lines::from("foo\nbar"));
+        let mut handler = KeyEventHandler::default();
+        state.cursor = Index2::new(0, 0);
+
+        // >> indents the current line; << dedents it back.
+        handler.on_event(KeyInput::new('>'), &mut state);
+        handler.on_event(KeyInput::new('>'), &mut state);
+        assert_eq!(state.lines.to_string(), "  foo\nbar");
+        handler.on_event(KeyInput::new('<'), &mut state);
+        handler.on_event(KeyInput::new('<'), &mut state);
+        assert_eq!(state.lines.to_string(), "foo\nbar");
+
+        // << never removes non-whitespace and stops at column 0.
+        handler.on_event(KeyInput::new('<'), &mut state);
+        handler.on_event(KeyInput::new('<'), &mut state);
+        assert_eq!(state.lines.to_string(), "foo\nbar");
+
+        // Visual > indents every selected line and returns to normal mode.
+        let mut state = EditorState::new(Lines::from("foo\nbar"));
+        let mut handler = KeyEventHandler::default();
+        state.cursor = Index2::new(0, 0);
+        handler.on_event(KeyInput::new('v'), &mut state);
+        handler.on_event(KeyInput::new('j'), &mut state);
+        handler.on_event(KeyInput::new('>'), &mut state);
+        assert_eq!(state.lines.to_string(), "  foo\n  bar");
+        assert_eq!(state.mode, EditorMode::Normal);
     }
 
     #[test]
