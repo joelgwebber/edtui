@@ -252,6 +252,8 @@ falling back to a platform-specific default if neither is set.
 | `o`                       | Add a new line below and enter Insert mode               |
 | `O`                       | Add a new line above and enter Insert mode               |
 | `J`                       | Join current line with the line below                    |
+| `>>`, `<<`                | Indent / dedent the current line by one shiftwidth       |
+| `>`, `<` (visual)         | Indent / dedent the selected lines                       |
 | `d`                       | Delete the selection (Visual mode)                       |
 | `dd`                      | Delete the current line                                  |
 | `dw`                      | Delete word forward                                      |

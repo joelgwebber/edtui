@@ -2,6 +2,7 @@
 pub mod change;
 pub mod cpaste;
 pub mod delete;
+pub mod indent;
 pub mod insert;
 pub mod motion;
 pub mod search;
@@ -28,6 +29,7 @@ pub use self::delete::{
     DeleteWordEnd, DeleteWordForward, JoinLineWithLineBelow, RemoveChar, RemoveCharBefore,
     ReplaceChar, ToggleCase,
 };
+pub use self::indent::{DedentLine, DedentSelection, IndentLine, IndentSelection};
 pub use self::insert::{AppendNewline, InsertChar, InsertNewline, LineBreak};
 pub use self::motion::{
     FindForward, MoveBackward, MoveBigWordBackward, MoveBigWordForward,
@@ -85,6 +87,10 @@ pub enum Action {
     InsertNewline(InsertNewline),
     ReplaceChar(ReplaceChar),
     ToggleCase(ToggleCase),
+    IndentLine(IndentLine),
+    DedentLine(DedentLine),
+    IndentSelection(IndentSelection),
+    DedentSelection(DedentSelection),
     RemoveChar(RemoveChar),
     RemoveCharBefore(RemoveCharBefore),
     DeleteChar(DeleteChar),
