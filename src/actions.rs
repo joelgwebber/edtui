@@ -29,8 +29,9 @@ pub use self::delete::{
 };
 pub use self::insert::{AppendNewline, InsertChar, InsertNewline, LineBreak};
 pub use self::motion::{
-    FindForward, MoveBackward, MoveDown, MoveForward, MoveHalfPageDown, MoveHalfPageUp,
-    MovePageDown, MovePageUp, MoveParagraphBackward, MoveParagraphForward, MoveToEndOfLine,
+    FindForward, MoveBackward, MoveDisplayLineDown, MoveDisplayLineUp, MoveDown, MoveForward,
+    MoveHalfPageDown, MoveHalfPageUp, MovePageDown, MovePageUp, MoveParagraphBackward,
+    MoveParagraphForward, MoveToDisplayLineEnd, MoveToDisplayLineStart, MoveToEndOfLine,
     MoveToFirst, MoveToMatchinBracket, MoveToStartOfLine, MoveUp, MoveWordBackward,
     MoveWordForward, MoveWordForwardToEndOfWord, TillForward,
 };
@@ -67,6 +68,10 @@ pub enum Action {
     MovePageUp(MovePageUp),
     MoveParagraphForward(MoveParagraphForward),
     MoveParagraphBackward(MoveParagraphBackward),
+    MoveDisplayLineDown(MoveDisplayLineDown),
+    MoveDisplayLineUp(MoveDisplayLineUp),
+    MoveToDisplayLineStart(MoveToDisplayLineStart),
+    MoveToDisplayLineEnd(MoveToDisplayLineEnd),
     FindForward(FindForward),
     TillForward(TillForward),
     InsertChar(InsertChar),
@@ -264,8 +269,8 @@ impl Execute for Composed {
 
 #[cfg(test)]
 mod tests {
-    use crate::clipboard::InternalClipboard;
     use crate::Lines;
+    use crate::clipboard::InternalClipboard;
 
     use super::*;
     fn test_state() -> EditorState {

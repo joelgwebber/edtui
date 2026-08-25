@@ -8,8 +8,8 @@ use jagged::Index2;
 
 use super::Execute;
 use crate::{
-    helper::{max_col, max_col_normal, skip_whitespace, skip_whitespace_rev},
     EditorMode, EditorState,
+    helper::{char_width, max_col, max_col_normal, skip_whitespace, skip_whitespace_rev},
 };
 
 #[derive(Clone, Debug, Copy)]
@@ -240,6 +240,197 @@ fn move_word_backward(state: &mut EditorState) {
     }
 
     state.cursor = start_index;
+}
+
+// ---- Display-line motions (gj / gk / g0 / g$) --------------------------------
+//
+// These move by *visual* (wrapped) line rather than logical line. They read the
+// rendered content width from the view and reproduce the renderer's hard
+// character wrap, so a long line that wraps onto several rows can be navigated
+// row by row. When wrapping is disabled they fall back to logical-line motion.
+
+#[derive(Clone, Copy)]
+enum DisplayMotion {
+    Down,
+    Up,
+    Start,
+    End,
+}
+
+/// Content width for display-line motions: the rendered width when wrapping is
+/// on, else 0 (which collapses each logical line to a single visual row, so
+/// `gj`/`gk` behave like `j`/`k`).
+fn display_width(state: &EditorState) -> usize {
+    if state.view.wrap {
+        state.view.screen_area.width as usize
+    } else {
+        0
+    }
+}
+
+fn display_row_chars(state: &EditorState, row: usize) -> Vec<char> {
+    state.lines.iter_row().nth(row).cloned().unwrap_or_default()
+}
+
+/// Char-index ranges `[start, end)` of each visual row, matching
+/// `LineWrapper::wrap_line`'s hard character wrap.
+fn display_wrap_ranges(line: &[char], width: usize, tab_width: usize) -> Vec<(usize, usize)> {
+    if width == 0 || line.is_empty() {
+        return vec![(0, line.len())];
+    }
+    let mut segs = Vec::new();
+    let mut seg_start = 0usize;
+    let mut w = 0usize;
+    for (i, &ch) in line.iter().enumerate() {
+        let cw = char_width(ch, tab_width);
+        if w + cw > width && i > seg_start {
+            segs.push((seg_start, i));
+            seg_start = i;
+            w = 0;
+        }
+        w += cw;
+    }
+    segs.push((seg_start, line.len()));
+    segs
+}
+
+/// The char index within `[s, e)` whose cell spans display column `vcol`.
+fn display_col_at_vcol(line: &[char], s: usize, e: usize, vcol: usize, tab_width: usize) -> usize {
+    let mut w = 0usize;
+    for (i, &ch) in line.iter().enumerate().take(e).skip(s) {
+        let cw = char_width(ch, tab_width);
+        if vcol < w + cw {
+            return i;
+        }
+        w += cw;
+    }
+    e
+}
+
+fn display_line_step(state: &mut EditorState, motion: DisplayMotion) {
+    let tab = state.view.tab_width;
+    let width = display_width(state);
+    let row = state.cursor.row;
+    let line = display_row_chars(state, row);
+    let segs = display_wrap_ranges(&line, width, tab);
+    let col = min(state.cursor.col, line.len());
+    let cur = segs
+        .iter()
+        .position(|&(s, e)| col >= s && col < e)
+        .unwrap_or(segs.len() - 1);
+    let (s0, e0) = segs[cur];
+    let vcol: usize = line[s0..min(col, e0)]
+        .iter()
+        .map(|&c| char_width(c, tab))
+        .sum();
+
+    let land = |state: &mut EditorState, target_row: usize, seg: (usize, usize), is_last: bool| {
+        let (s, e) = seg;
+        let tline = display_row_chars(state, target_row);
+        let raw = display_col_at_vcol(&tline, s, e, vcol, tab);
+        let hi = if is_last {
+            max_col(&state.lines, &Index2::new(target_row, 0), state.mode)
+        } else {
+            e.saturating_sub(1)
+        };
+        state.cursor.row = target_row;
+        state.cursor.col = raw.clamp(s, hi.max(s));
+    };
+
+    match motion {
+        DisplayMotion::Start => state.cursor.col = s0,
+        DisplayMotion::End => {
+            let is_last = cur + 1 == segs.len();
+            let hi = if is_last {
+                max_col(&state.lines, &state.cursor, state.mode)
+            } else {
+                e0.saturating_sub(1)
+            };
+            state.cursor.col = hi.max(s0);
+        }
+        DisplayMotion::Down => {
+            if cur + 1 < segs.len() {
+                let is_last = cur + 2 == segs.len();
+                land(state, row, segs[cur + 1], is_last);
+            } else {
+                let n = state.lines.len();
+                let max_row = if state.mode == EditorMode::Insert {
+                    n
+                } else {
+                    n.saturating_sub(1)
+                };
+                if row < max_row {
+                    let nline = display_row_chars(state, row + 1);
+                    let nsegs = display_wrap_ranges(&nline, width, tab);
+                    land(state, row + 1, nsegs[0], nsegs.len() == 1);
+                }
+            }
+        }
+        DisplayMotion::Up => {
+            if cur > 0 {
+                land(state, row, segs[cur - 1], false);
+            } else if row > 0 {
+                let pline = display_row_chars(state, row - 1);
+                let psegs = display_wrap_ranges(&pline, width, tab);
+                let last = psegs.len() - 1;
+                land(state, row - 1, psegs[last], true);
+            }
+        }
+    }
+}
+
+fn display_motion_finish(state: &mut EditorState) {
+    if state.mode == EditorMode::Visual {
+        set_selection_with_lines(&mut state.selection, state.cursor, &state.lines);
+    }
+}
+
+/// Move down one visual (wrapped) line. Vim `gj`.
+#[derive(Clone, Debug, Copy)]
+pub struct MoveDisplayLineDown(pub usize);
+
+impl Execute for MoveDisplayLineDown {
+    fn execute(&mut self, state: &mut EditorState) {
+        for _ in 0..self.0 {
+            display_line_step(state, DisplayMotion::Down);
+        }
+        display_motion_finish(state);
+    }
+}
+
+/// Move up one visual (wrapped) line. Vim `gk`.
+#[derive(Clone, Debug, Copy)]
+pub struct MoveDisplayLineUp(pub usize);
+
+impl Execute for MoveDisplayLineUp {
+    fn execute(&mut self, state: &mut EditorState) {
+        for _ in 0..self.0 {
+            display_line_step(state, DisplayMotion::Up);
+        }
+        display_motion_finish(state);
+    }
+}
+
+/// Move to the first column of the current visual line. Vim `g0`.
+#[derive(Clone, Debug, Copy)]
+pub struct MoveToDisplayLineStart;
+
+impl Execute for MoveToDisplayLineStart {
+    fn execute(&mut self, state: &mut EditorState) {
+        display_line_step(state, DisplayMotion::Start);
+        display_motion_finish(state);
+    }
+}
+
+/// Move to the last column of the current visual line. Vim `g$`.
+#[derive(Clone, Debug, Copy)]
+pub struct MoveToDisplayLineEnd;
+
+impl Execute for MoveToDisplayLineEnd {
+    fn execute(&mut self, state: &mut EditorState) {
+        display_line_step(state, DisplayMotion::End);
+        display_motion_finish(state);
+    }
 }
 
 // Move the cursor to the start of the line.

@@ -237,6 +237,8 @@ falling back to a platform-specific default if neither is set.
 | `_`                       | Move cursor to first non-blank character                 |
 | `$`                       | Move cursor to end of line                               |
 | `gg`                      | Move cursor to the first row                             |
+| `gj`, `gk`                | Move down/up one visual (wrapped) line                   |
+| `g0`, `g$`                | Move to start/end of the current visual (wrapped) line   |
 | `G `                      | Move cursor to the last row                              |
 | `%`                       | Move cursor to closing/opening bracket                   |
 | `{,}`                     | Move cursor to next/previous paragraph                   |
