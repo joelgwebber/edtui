@@ -1,6 +1,8 @@
 pub(crate) mod deprecated;
 pub(crate) mod input;
 
+#[cfg(feature = "system-editor")]
+use crate::actions::OpenSystemEditor;
 use crate::actions::cpaste::PasteOverSelection;
 use crate::actions::delete::{
     DeleteBigWordForward, DeleteCharForward, DeleteToEndOfLine, DeleteToFirstCharOfLine,
@@ -10,20 +12,18 @@ use crate::actions::motion::{
     MoveHalfPageDown, MovePageDown, MovePageUp, MoveToFirstRow, MoveToLastRow,
 };
 use crate::actions::search::StartSearch;
-#[cfg(feature = "system-editor")]
-use crate::actions::OpenSystemEditor;
 use crate::actions::{
     Action, AppendCharToSearch, AppendNewline, Chainable, ChangeBigWord, ChangeFindForward,
-    ChangeInnerBetween, ChangeInnerBigWord, ChangeInnerWord, ChangeSelection, ChangeTillForward,
-    ChangeWord, CopyLine, CopySelection, DeleteChar, DeleteFindForward, DeleteInnerBetween,
-    DeleteInnerBigWord, DeleteInnerWord, DeleteLine, DeleteSelection, DeleteTillForward, Execute,
-    FindFirst, FindForward, FindNext, FindPrevious, InsertChar, InsertNewline,
-    JoinLineWithLineBelow, LineBreak, MoveBackward, MoveDown, MoveForward, MoveHalfPageUp,
-    MoveParagraphBackward, MoveParagraphForward, MoveToEndOfLine, MoveToFirst,
-    MoveToMatchinBracket, MoveToStartOfLine, MoveUp, MoveWordBackward, MoveWordForward,
-    MoveWordForwardToEndOfWord, Paste, PasteBefore, Redo, RemoveChar, RemoveCharFromSearch,
-    RepeatLastChange, SelectCurrentSearch, SelectInnerBetween, SelectInnerWord, SelectLine,
-    StopSearch, SwitchMode, TillForward, Undo,
+    ChangeInnerBetween, ChangeInnerBigWord, ChangeInnerWord, ChangeLine, ChangeSelection,
+    ChangeTillForward, ChangeToEndOfLine, ChangeWord, CopyLine, CopySelection, DeleteChar,
+    DeleteFindForward, DeleteInnerBetween, DeleteInnerBigWord, DeleteInnerWord, DeleteLine,
+    DeleteSelection, DeleteTillForward, Execute, FindFirst, FindForward, FindNext, FindPrevious,
+    InsertChar, InsertNewline, JoinLineWithLineBelow, LineBreak, MoveBackward, MoveDown,
+    MoveForward, MoveHalfPageUp, MoveParagraphBackward, MoveParagraphForward, MoveToEndOfLine,
+    MoveToFirst, MoveToMatchinBracket, MoveToStartOfLine, MoveUp, MoveWordBackward,
+    MoveWordForward, MoveWordForwardToEndOfWord, Paste, PasteBefore, Redo, RemoveChar,
+    RemoveCharFromSearch, RepeatLastChange, SelectCurrentSearch, SelectInnerBetween,
+    SelectInnerWord, SelectLine, StopSearch, Substitute, SwitchMode, TillForward, Undo,
 };
 use crate::events::KeyInput;
 use crate::{EditorMode, EditorState};
@@ -618,6 +618,25 @@ fn vim_keybindings() -> HashMap<KeyEventRegister, Action> {
         (
             KeyEventRegister::n(vec![KeyInput::new('c'), KeyInput::new('w')]),
             ChangeWord(1).into(),
+        ),
+        // Change to the end of the line (C == c$)
+        (
+            KeyEventRegister::n(vec![KeyInput::shift('C')]),
+            ChangeToEndOfLine.into(),
+        ),
+        // Change the whole line (cc / S)
+        (
+            KeyEventRegister::n(vec![KeyInput::new('c'), KeyInput::new('c')]),
+            ChangeLine.into(),
+        ),
+        (
+            KeyEventRegister::n(vec![KeyInput::shift('S')]),
+            ChangeLine.into(),
+        ),
+        // Substitute the character under the cursor (s == cl)
+        (
+            KeyEventRegister::n(vec![KeyInput::new('s')]),
+            Substitute(1).into(),
         ),
         // Change to the end of the big WORD
         (

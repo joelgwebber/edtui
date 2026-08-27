@@ -19,7 +19,7 @@ pub use system_editor::OpenSystemEditor;
 
 pub use self::change::{
     ChangeBigWord, ChangeFindForward, ChangeInnerBetween, ChangeInnerBigWord, ChangeInnerWord,
-    ChangeSelection, ChangeTillForward, ChangeWord,
+    ChangeLine, ChangeSelection, ChangeTillForward, ChangeToEndOfLine, ChangeWord, Substitute,
 };
 pub use self::cpaste::{CopyLine, CopySelection, Paste, PasteBefore};
 pub use self::delete::{
@@ -88,6 +88,9 @@ pub enum Action {
     DeleteBigWordEnd(DeleteBigWordEnd),
     ChangeWord(ChangeWord),
     ChangeBigWord(ChangeBigWord),
+    ChangeToEndOfLine(ChangeToEndOfLine),
+    ChangeLine(ChangeLine),
+    Substitute(Substitute),
     ChangeFindForward(ChangeFindForward),
     ChangeTillForward(ChangeTillForward),
     DeleteWordBackward(DeleteWordBackward),
@@ -264,8 +267,8 @@ impl Execute for Composed {
 
 #[cfg(test)]
 mod tests {
-    use crate::clipboard::InternalClipboard;
     use crate::Lines;
+    use crate::clipboard::InternalClipboard;
 
     use super::*;
     fn test_state() -> EditorState {
