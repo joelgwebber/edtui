@@ -6,7 +6,8 @@
 
 use super::Execute;
 use super::delete::{
-    DeleteBigWordEnd, DeleteFindForward, DeleteTillForward, DeleteWordEnd, delete_selection,
+    DeleteBigWordEnd, DeleteCharForward, DeleteFindForward, DeleteTillForward, DeleteToEndOfLine,
+    DeleteWordEnd, delete_selection,
 };
 use super::motion::find_char_forward;
 use super::select::{DeleteInnerBetween, DeleteInnerBigWord, DeleteInnerWord};
@@ -189,10 +190,98 @@ impl Execute for ChangeSelection {
     }
 }
 
+/// Changes from the cursor to the end of the line: deletes it and enters insert
+/// mode at the cut point (Vim `C`, i.e. `c$`).
+#[derive(Clone, Debug, Copy)]
+pub struct ChangeToEndOfLine;
+
+impl Execute for ChangeToEndOfLine {
+    fn execute(&mut self, state: &mut EditorState) {
+        let col = state.cursor.col;
+        DeleteToEndOfLine.execute(state);
+        // Delete leaves the cursor on the last remaining char (Normal-mode
+        // resting position); for a change we insert where the cut began.
+        state.cursor.col = col;
+        state.mode = EditorMode::Insert;
+    }
+
+    fn is_repeatable(&self) -> bool {
+        true
+    }
+}
+
+/// Changes the whole line: clears its content (keeping the line) and enters
+/// insert mode at the start (Vim `cc` / `S`).
+#[derive(Clone, Debug, Copy)]
+pub struct ChangeLine;
+
+impl Execute for ChangeLine {
+    fn execute(&mut self, state: &mut EditorState) {
+        state.cursor.col = 0;
+        DeleteToEndOfLine.execute(state);
+        state.cursor.col = 0;
+        state.mode = EditorMode::Insert;
+    }
+
+    fn is_repeatable(&self) -> bool {
+        true
+    }
+}
+
+/// Substitutes the character under the cursor: deletes it and enters insert
+/// mode in its place (Vim `s`, i.e. `cl`).
+#[derive(Clone, Debug, Copy)]
+pub struct Substitute(pub usize);
+
+impl Execute for Substitute {
+    fn set_count(&mut self, count: usize) {
+        self.0 = count;
+    }
+
+    fn execute(&mut self, state: &mut EditorState) {
+        DeleteCharForward(self.0).execute(state);
+        state.mode = EditorMode::Insert;
+    }
+
+    fn is_repeatable(&self) -> bool {
+        true
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{Index2, Lines};
+
+    #[test]
+    fn test_change_to_end_of_line() {
+        let mut state = EditorState::new(Lines::from("Hello World"));
+        state.cursor = Index2::new(0, 6); // on 'W'
+        ChangeToEndOfLine.execute(&mut state);
+        assert_eq!(state.lines.to_string(), "Hello ");
+        assert_eq!(state.cursor, Index2::new(0, 6));
+        assert_eq!(state.mode, EditorMode::Insert);
+    }
+
+    #[test]
+    fn test_change_line_clears_and_keeps_the_line() {
+        let mut state = EditorState::new(Lines::from("foo\nbar"));
+        state.cursor = Index2::new(0, 2);
+        ChangeLine.execute(&mut state);
+        assert_eq!(state.lines.to_string(), "\nbar");
+        assert_eq!(state.cursor, Index2::new(0, 0));
+        assert_eq!(state.mode, EditorMode::Insert);
+    }
+
+    #[test]
+    fn test_substitute_char() {
+        let mut state = EditorState::new(Lines::from("abc"));
+        state.cursor = Index2::new(0, 0);
+        Substitute(1).execute(&mut state);
+        assert_eq!(state.lines.to_string(), "bc");
+        assert_eq!(state.cursor, Index2::new(0, 0));
+        assert_eq!(state.mode, EditorMode::Insert);
+    }
 
     #[test]
     fn test_change_word_enters_insert_mode() {
