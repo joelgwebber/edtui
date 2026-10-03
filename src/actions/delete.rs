@@ -691,17 +691,40 @@ pub(crate) fn delete_selection(state: &mut EditorState, selection: &Selection) -
     selection.extract_from(&mut state.lines)
 }
 
-/// Joins line below to the current line.
+/// Joins line below to the current line, like vim's `J`: the next line's
+/// leading whitespace is dropped and a single space separates the two, unless
+/// the current line is empty or already ends in whitespace, or the next line
+/// is empty or starts with `)`. The cursor lands on the join point.
 #[derive(Clone, Debug, Copy)]
 pub struct JoinLineWithLineBelow;
 
 impl Execute for JoinLineWithLineBelow {
     fn execute(&mut self, state: &mut EditorState) {
-        if state.cursor.row + 1 >= state.lines.len() {
+        let row = state.cursor.row;
+        if row + 1 >= state.lines.len() {
             return;
         }
         state.capture();
-        state.lines.join_lines(state.cursor.row);
+
+        // Drop the next line's leading whitespace.
+        let Some(next) = state.lines.get_mut(RowIndex::new(row + 1)) else {
+            return;
+        };
+        let indent = next.iter().take_while(|c| c.is_whitespace()).count();
+        next.drain(..indent);
+        let next_starts_ok = next.first().is_some_and(|c| *c != ')');
+
+        let Some(current) = state.lines.get_mut(RowIndex::new(row)) else {
+            return;
+        };
+        let join_col = current.len();
+        if next_starts_ok && current.last().is_some_and(|c| !c.is_whitespace()) {
+            current.push(' ');
+        }
+
+        state.lines.join_lines(row);
+        state.cursor.col = join_col;
+        state.clamp_column();
     }
 
     fn is_repeatable(&self) -> bool {
@@ -734,6 +757,62 @@ mod tests {
         RemoveChar(1).execute(&mut state);
         assert_eq!(state.cursor, Index2::new(0, 9));
         assert_eq!(state.lines, Lines::from("Hell World\n\n123."));
+    }
+
+    fn join(text: &str, col: usize) -> EditorState {
+        let mut state = EditorState::new(Lines::from(text));
+        state.cursor = Index2::new(0, col);
+        JoinLineWithLineBelow.execute(&mut state);
+        state
+    }
+
+    #[test]
+    fn test_join_line_inserts_single_space() {
+        let state = join("hello\nworld", 0);
+        assert_eq!(state.lines, Lines::from("hello world"));
+        // Cursor sits on the inserted space (the join point).
+        assert_eq!(state.cursor, Index2::new(0, 5));
+    }
+
+    #[test]
+    fn test_join_line_strips_next_indent() {
+        let state = join("hello\n    world", 0);
+        assert_eq!(state.lines, Lines::from("hello world"));
+    }
+
+    #[test]
+    fn test_join_line_no_extra_space_cases() {
+        // Current line already ends in whitespace.
+        assert_eq!(join("hello \nworld", 0).lines, Lines::from("hello world"));
+        // Next line starts with `)`.
+        assert_eq!(join("foo(a\n)", 0).lines, Lines::from("foo(a)"));
+        // Next line empty (or all whitespace).
+        assert_eq!(join("hello\n   ", 0).lines, Lines::from("hello"));
+        // Current line empty.
+        assert_eq!(join("\nworld", 0).lines, Lines::from("world"));
+    }
+
+    #[test]
+    fn test_join_line_last_line_is_noop() {
+        let state = join("hello", 2);
+        assert_eq!(state.lines, Lines::from("hello"));
+        assert_eq!(state.cursor, Index2::new(0, 2));
+    }
+
+    #[test]
+    fn test_backspace_and_delete_join_add_no_space() {
+        // Only `J` pads with a space: Backspace at line start and Delete at
+        // line end are plain newline deletions.
+        let mut state = EditorState::new(Lines::from("hello\nworld"));
+        state.cursor = Index2::new(1, 0);
+        DeleteChar(1).execute(&mut state);
+        assert_eq!(state.lines, Lines::from("helloworld"));
+
+        let mut state = EditorState::new(Lines::from("hello\nworld"));
+        state.mode = EditorMode::Insert;
+        state.cursor = Index2::new(0, 5);
+        DeleteCharForward(1).execute(&mut state);
+        assert_eq!(state.lines, Lines::from("helloworld"));
     }
 
     #[test]
