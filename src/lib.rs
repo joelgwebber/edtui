@@ -351,6 +351,7 @@ pub mod events;
 #[cfg(feature = "system-editor")]
 pub use actions::system_editor;
 mod helper;
+mod markdown;
 mod state;
 mod view;
 

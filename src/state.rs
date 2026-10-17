@@ -37,6 +37,9 @@ pub struct EditorState {
     /// Internal view state of the editor.
     pub(crate) view: ViewState,
 
+    /// Whether Enter in insert mode continues markdown lists and quotes.
+    pub(crate) markdown_continuation: bool,
+
     /// State holding the search results in search mode.
     pub(crate) search: SearchState,
 
@@ -89,6 +92,7 @@ impl EditorState {
             selection: None,
             highlights: Vec::new(),
             view: ViewState::default(),
+            markdown_continuation: false,
             search: SearchState::default(),
             undo: Stack::new(),
             redo: Stack::new(),
@@ -191,6 +195,35 @@ impl EditorState {
     #[must_use]
     pub fn is_single_line(&self) -> bool {
         self.view.single_line
+    }
+
+    /// Enables or disables markdown continuation of the insert-mode line break.
+    ///
+    /// When enabled, a line break at the end of a markdown block quote (`> `)
+    /// or list item (`- `, `* `, `+ `, `1. `, `1) `, `- [ ] `) starts the next
+    /// line with the same indent and marker. Ordered markers are renumbered and
+    /// checked task items continue as unchecked. A line break on an item whose
+    /// body is empty removes the marker instead, ending the list or quote.
+    /// Splitting a line in the middle gives the second half the marker.
+    ///
+    /// Disabled by default, so plain editors are unaffected.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use edtui::{EditorState, Lines};
+    ///
+    /// let mut state = EditorState::new(Lines::from("- item"));
+    /// state.set_markdown_continuation(true);
+    /// ```
+    pub fn set_markdown_continuation(&mut self, enabled: bool) {
+        self.markdown_continuation = enabled;
+    }
+
+    /// Returns whether markdown continuation of line breaks is enabled.
+    #[must_use]
+    pub fn is_markdown_continuation(&self) -> bool {
+        self.markdown_continuation
     }
 
     /// Add a custom highlight range.
