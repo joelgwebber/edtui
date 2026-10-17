@@ -4,6 +4,7 @@ use super::Execute;
 use crate::{
     EditorState,
     helper::{insert_char, line_break},
+    markdown::Marker,
 };
 
 /// Inserts a single character at the current cursor position.
@@ -49,6 +50,9 @@ impl Execute for LineBreak {
         if state.lines.is_empty() {
             state.lines.push(Vec::new());
         }
+        if state.markdown_continuation && markdown_line_break(state, self.0) {
+            return;
+        }
         for _ in 0..self.0 {
             line_break(&mut state.lines, &mut state.cursor);
         }
@@ -57,6 +61,37 @@ impl Execute for LineBreak {
     fn is_repeatable(&self) -> bool {
         true
     }
+}
+
+/// Handles a line break on a markdown quote or list item. Returns `false` when
+/// the line has no marker or the cursor is inside it, leaving a plain break.
+fn markdown_line_break(state: &mut EditorState, count: usize) -> bool {
+    let row = state.cursor.row;
+    let Some(line) = state.lines.get(RowIndex::new(row)) else {
+        return false;
+    };
+    let Some(marker) = Marker::parse(line) else {
+        return false;
+    };
+    let col = state.cursor.col;
+
+    // An item with an empty body: the break removes the marker.
+    if col >= line.len() && line[marker.len..].iter().all(|c| c.is_whitespace()) {
+        state.lines.get_mut(RowIndex::new(row)).map(Vec::clear);
+        state.cursor.col = 0;
+        return true;
+    }
+    if col < marker.len {
+        return false;
+    }
+
+    for k in 1..=count {
+        line_break(&mut state.lines, &mut state.cursor);
+        for c in marker.continuation(k) {
+            insert_char(&mut state.lines, &mut state.cursor, c, false);
+        }
+    }
+    true
 }
 
 /// Appends a newline below the current cursor position.
@@ -172,6 +207,102 @@ mod tests {
         InsertChar('a').execute(&mut state);
         assert_eq!(state.cursor, Index2::new(0, 1));
         assert_eq!(state.lines, Lines::from("a\nb"));
+    }
+
+    fn md_state(text: &str, row: usize, col: usize) -> EditorState {
+        let mut state = EditorState::new(Lines::from(text));
+        state.set_markdown_continuation(true);
+        state.mode = crate::EditorMode::Insert;
+        state.cursor = Index2::new(row, col);
+        state
+    }
+
+    fn text(state: &EditorState) -> String {
+        state
+            .lines
+            .iter_row()
+            .map(|r| r.iter().collect::<String>())
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[test]
+    fn test_markdown_off_by_default() {
+        let mut state = EditorState::new(Lines::from("- a"));
+        state.cursor = Index2::new(0, 3);
+        LineBreak(1).execute(&mut state);
+        assert_eq!(text(&state), "- a\n");
+        assert_eq!(state.cursor, Index2::new(1, 0));
+    }
+
+    #[test]
+    fn test_markdown_continues_markers() {
+        for (before, after) in [
+            ("- a", "- a\n- "),
+            ("* a", "* a\n* "),
+            ("+ a", "+ a\n+ "),
+            ("> q", "> q\n> "),
+            ("  - a", "  - a\n  - "),
+            ("1. a", "1. a\n2. "),
+            ("9) a", "9) a\n10) "),
+            ("- [ ] a", "- [ ] a\n- [ ] "),
+            ("- [x] a", "- [x] a\n- [ ] "),
+            ("> - a", "> - a\n> - "),
+        ] {
+            let mut state = md_state(before, 0, before.chars().count());
+            LineBreak(1).execute(&mut state);
+            assert_eq!(text(&state), after, "{before:?}");
+            assert_eq!(
+                state.cursor,
+                Index2::new(1, after.rsplit('\n').next().unwrap().chars().count())
+            );
+        }
+    }
+
+    #[test]
+    fn test_markdown_empty_item_ends_list() {
+        for before in ["- ", "> ", "1. ", "- [ ] ", "  * "] {
+            let mut state = md_state(&format!("x\n{before}"), 1, before.chars().count());
+            LineBreak(1).execute(&mut state);
+            assert_eq!(text(&state), "x\n", "{before:?}");
+            assert_eq!(state.cursor, Index2::new(1, 0));
+        }
+    }
+
+    #[test]
+    fn test_markdown_split_in_the_middle() {
+        let mut state = md_state("- ab", 0, 3);
+        LineBreak(1).execute(&mut state);
+        assert_eq!(text(&state), "- a\n- b");
+        assert_eq!(state.cursor, Index2::new(1, 2));
+
+        // Inside the marker itself the break is plain.
+        let mut state = md_state("1. ab", 0, 1);
+        LineBreak(1).execute(&mut state);
+        assert_eq!(text(&state), "1\n. ab");
+    }
+
+    #[test]
+    fn test_markdown_plain_lines_unchanged() {
+        let mut state = md_state("plain", 0, 5);
+        LineBreak(1).execute(&mut state);
+        assert_eq!(text(&state), "plain\n");
+    }
+
+    #[test]
+    fn test_markdown_count_renumbers() {
+        let mut state = md_state("1. a", 0, 4);
+        LineBreak(3).execute(&mut state);
+        assert_eq!(text(&state), "1. a\n2. \n3. \n4. ");
+        assert_eq!(state.cursor, Index2::new(3, 3));
+    }
+
+    #[test]
+    fn test_markdown_single_line_ignored() {
+        let mut state = md_state("- a", 0, 3);
+        state.set_single_line(true);
+        LineBreak(1).execute(&mut state);
+        assert_eq!(text(&state), "- a");
     }
 
     #[test]

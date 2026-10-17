@@ -2004,4 +2004,31 @@ mod tests {
         assert_eq!(state.cursor.col, 6);
         assert_eq!(state.lines.to_string(), "Hello World");
     }
+
+    #[test]
+    fn test_markdown_continuation_through_enter_key() {
+        use crate::{EditorState, Index2, Lines};
+
+        let mut state = EditorState::new(Lines::from("- a"));
+        state.set_markdown_continuation(true);
+        state.cursor = Index2::new(0, 0);
+        let mut handler = KeyEventHandler::default();
+        let mut press = |k: KeyInput, state: &mut EditorState| handler.on_event(k, state);
+
+        // `A`, Enter, `b`, Enter, Enter, Esc: one item, one more, then the
+        // empty marker is removed.
+        press(KeyInput::shift('A'), &mut state);
+        press(KeyInput::new(KeyCode::Enter), &mut state);
+        press(KeyInput::new('b'), &mut state);
+        assert_eq!(state.lines.to_string(), "- a\n- b");
+        press(KeyInput::new(KeyCode::Enter), &mut state);
+        assert_eq!(state.lines.to_string(), "- a\n- b\n- ");
+        press(KeyInput::new(KeyCode::Enter), &mut state);
+        assert_eq!(state.lines.to_string(), "- a\n- b\n");
+        press(KeyInput::new(KeyCode::Esc), &mut state);
+
+        // The whole insert session is one undo step, as without continuation.
+        state.undo();
+        assert_eq!(state.lines.to_string(), "- a");
+    }
 }
